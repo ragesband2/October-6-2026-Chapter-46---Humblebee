@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chapter 46 - Humblebee</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;700&display=swap');
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050811;
+            font-family: 'Rajdhani', sans-serif;
+            color: #fff;
+        }
+
+        .font-orbitron { font-family: 'Orbitron', sans-serif; }
+
+        /* Cyberpunk Dark Glassmorphism */
+        .cyber-panel {
+            background: rgba(10, 16, 30, 0.82);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 240, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .cyber-border-yellow {
+            border-color: rgba(255, 200, 0, 0.5);
+            box-shadow: 0 0 15px rgba(255, 200, 0, 0.2);
+        }
+
+        .cyber-btn {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(0, 80, 160, 0.4) 100%);
+            border: 1px solid #00f0ff;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+
+        .cyber-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.5) 0%, rgba(0, 120, 240, 0.7) 100%);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .cyber-btn:active {
+            transform: translateY(1px);
+        }
+
+        .cyber-btn-yellow {
+            background: linear-gradient(135deg, rgba(255, 200, 0, 0.25) 0%, rgba(180, 120, 0, 0.5) 100%);
+            border: 1px solid #ffc800;
+        }
+
+        .cyber-btn-yellow:hover {
+            background: linear-gradient(135deg, rgba(255, 200, 0, 0.6) 0%, rgba(220, 150, 0, 0.8) 100%);
+            box-shadow: 0 0 20px rgba(255, 200, 0, 0.7);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+        ::-webkit-scrollbar-thumb { background: #00f0ff; border-radius: 3px; }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 20;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(0, 240, 255, 0.8);
+        }
+        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
+        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
+
+        /* Damage Vignette Effect */
+        #damage-vignette {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 100px rgba(255,0,0,0);
+            transition: box-shadow 0.2s ease-out;
+            z-index: 15;
+        }
+
+        /* Solar Beam Canvas Overlay */
+        #fx-canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 12;
+        }
+    </style>
+</head>
+<body class="bg-black select-none overflow-hidden">
+
+    <!-- 3D WebGL Canvas -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+    <canvas id="fx-canvas"></canvas>
+
+    <!-- Damage Screen Flash HUD -->
+    <div id="damage-vignette"></div>
+    <div id="crosshair"></div>
+
+    <!-- HUD OVERLAY LAYER -->
+    <div id="hud-layer" class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 md:p-6">
+        
+        <!-- Top HUD Header -->
+        <div class="flex justify-between items-start w-full">
+            
+            <!-- Left: Player Status Panel -->
+            <div class="cyber-panel p-4 w-72 md:w-80 pointer-events-auto">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center space-x-3">
+                        <div id="player-avatar" class="w-12 h-12 rounded bg-yellow-500/20 border border-yellow-400 flex items-center justify-center text-yellow-400 font-orbitron font-bold text-xl shadow-[0_0_10px_rgba(255,200,0,0.4)]">
+                            BB
+                        </div>
+                        <div>
+                            <h2 id="player-name-text" class="font-orbitron font-bold text-lg text-yellow-400 leading-none">BUBBLEBEE</h2>
+                            <p id="player-class-text" class="text-xs text-cyan-300 font-semibold tracking-wider">AUTOBOT SCOUT</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-gray-400">LEVEL</span>
+                        <div id="player-level" class="font-orbitron font-extrabold text-2xl text-cyan-400">1</div>
+                    </div>
+                </div>
+
+                <!-- Health Bar -->
+                <div class="space-y-1 mb-2">
+                    <div class="flex justify-between text-xs font-bold tracking-wider">
+                        <span class="text-red-400"><i class="fa-solid fa-heart mr-1"></i> HEALTH</span>
+                        <span id="hp-text" class="text-white">500 / 500</span>
+                    </div>
+                    <div class="w-full h-3 bg-gray-900/80 rounded-sm p-0.5 border border-red-900/50">
+                        <div id="hp-bar" class="h-full bg-gradient-to-r from-red-600 to-red-400 rounded-sm transition-all duration-300" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Energon Shield Bar -->
+                <div class="space-y-1 mb-2">
+                    <div class="flex justify-between text-xs font-bold tracking-wider">
+                        <span class="text-cyan-400"><i class="fa-solid fa-bolt mr-1"></i> ENERGON SHIELD</span>
+                        <span id="shield-text" class="text-white">200 / 200</span>
+                    </div>
+                    <div class="w-full h-2.5 bg-gray-900/80 rounded-sm p-0.5 border border-cyan-900/50">
+                        <div id="shield-bar" class="h-full bg-gradient-to-r from-cyan-600 to-cyan-300 rounded-sm transition-all duration-300" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- XP Bar -->
+                <div class="space-y-1">
+                    <div class="flex justify-between text-[10px] text-gray-400 font-bold">
+                        <span>XP PROGRESS</span>
+                        <span id="xp-text">0 / 100</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-gray-900/80 rounded-sm overflow-hidden">
+                        <div id="xp-bar" class="h-full bg-yellow-400 transition-all duration-300" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Center: Quest Tracker & Story Banner -->
+            <div id="quest-tracker-panel" class="cyber-panel p-4 max-w-md w-full mx-4 text-center pointer-events-auto border-yellow-500/30">
+                <div class="text-xs font-orbitron text-yellow-400 tracking-widest uppercase mb-1 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-compass animate-spin"></i> Active Chapter 46 Objective
+                </div>
+                <h3 id="quest-title" class="font-orbitron font-bold text-white text-base md:text-lg mb-1">1. Speak with Optimus Prime</h3>
+                <p id="quest-desc" class="text-xs md:text-sm text-cyan-200">Find Optimus Prime on Earth to learn the true power of Humility.</p>
+                <div id="fusion-status-tag" class="hidden mt-2 inline-block px-3 py-1 bg-yellow-500/20 border border-yellow-400 text-yellow-300 text-xs font-orbitron rounded tracking-widest animate-pulse">
+                    VOLTES 5 FUSION READY - PRESS 'F' TO TRANSFORM
+                </div>
+            </div>
+
+            <!-- Right: Mini-Map HUD -->
+            <div class="cyber-panel p-2 w-36 h-36 md:w-44 md:h-44 relative flex items-center justify-center pointer-events-auto">
+                <div class="absolute top-1 left-2 text-[10px] font-orbitron text-cyan-400 tracking-wider">RADAR SYSTEM</div>
+                <canvas id="minimap-canvas" width="150" height="150" class="rounded border border-cyan-500/30 bg-black/60"></canvas>
+            </div>
+        </div>
+
+        <!-- Middle: Dynamic Dialogue Cutscene / Speech Box -->
+        <div id="dialogue-box" class="hidden my-auto mx-auto max-w-2xl w-full cyber-panel p-5 pointer-events-auto border-cyan-400 shadow-[0_0_30px_rgba(0,240,255,0.2)]">
+            <div class="flex items-start space-x-4">
+                <div id="dialogue-portrait" class="w-16 h-16 rounded border-2 border-cyan-400 bg-cyan-900/40 flex-shrink-0 flex items-center justify-center text-2xl text-cyan-300">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="flex-1">
+                    <div class="flex justify-between items-center mb-1">
+                        <h4 id="dialogue-speaker" class="font-orbitron font-bold text-lg text-yellow-400">OPTIMUS PRIME</h4>
+                        <span class="text-xs text-gray-400">[PRESS ENTER / SPACE TO CONTINUE]</span>
+                    </div>
+                    <p id="dialogue-text" class="text-sm md:text-base text-cyan-100 font-medium leading-relaxed">
+                        "Bumblebee, I have a good message to say for you. If you plan to wish and defeat Megatron with his evil deeds... You must become humble!"
+                    </p>
+                </div>
+            </div>
+            <div class="mt-3 flex justify-end">
+                <button id="dialogue-next-btn" class="cyber-btn px-5 py-1.5 text-xs font-orbitron font-bold text-cyan-300">
+                    CONTINUE <i class="fa-solid fa-chevron-right ml-1"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Boss Health Overlay -->
+        <div id="boss-hud-panel" class="hidden mx-auto w-full max-w-2xl cyber-panel p-3 mb-2 pointer-events-auto border-red-500/50 shadow-[0_0_20px_rgba(255,0,0,0.3)]">
+            <div class="flex justify-between items-center mb-1">
+                <span id="boss-name" class="font-orbitron font-black text-red-500 tracking-wider text-sm md:text-base">MEGATRON - DECEPTICON LEADER</span>
+                <span id="boss-hp-text" class="font-orbitron text-xs text-red-300">5000 / 5000</span>
+            </div>
+            <div class="w-full h-4 bg-gray-950 rounded border border-red-800 p-0.5">
+                <div id="boss-hp-bar" class="h-full bg-gradient-to-r from-red-700 via-red-500 to-orange-500 rounded transition-all duration-200" style="width: 100%;"></div>
+            </div>
+        </div>
+
+        <!-- Bottom HUD: Hotbar Controls & Menu Buttons -->
+        <div class="flex flex-col md:flex-row justify-between items-end gap-3 w-full">
+            
+            <!-- Bottom Left: Quick Menu Buttons & Cam Switch -->
+            <div class="flex gap-2 pointer-events-auto">
+                <button id="btn-inventory" class="cyber-btn px-3 py-2 text-xs font-orbitron font-semibold text-cyan-300 flex items-center gap-2">
+                    <i class="fa-solid fa-briefcase"></i> INVENTORY (I)
+                </button>
+                <button id="btn-skills" class="cyber-btn px-3 py-2 text-xs font-orbitron font-semibold text-cyan-300 flex items-center gap-2">
+                    <i class="fa-solid fa-sitemap"></i> SKILLS (K)
+                </button>
+                <button id="btn-camera" class="cyber-btn px-3 py-2 text-xs font-orbitron font-semibold text-cyan-300 flex items-center gap-2">
+                    <i class="fa-solid fa-camera"></i> CAM: <span id="cam-mode-text">3RD</span> (C)
+                </button>
+            </div>
+
+            <!-- Bottom Right: Ability Hotbar Buttons -->
+            <div class="cyber-panel p-2 flex gap-2 pointer-events-auto">
+                <div class="cyber-btn p-2 text-center w-14 h-16 flex flex-col justify-between items-center cursor-pointer" id="skill-1">
+                    <span class="text-[10px] font-orbitron text-cyan-400">L-CLICK</span>
+                    <i class="fa-solid fa-hand-fist text-yellow-400 text-lg"></i>
+                    <span class="text-[10px] text-gray-300">Melee</span>
+                </div>
+                <div class="cyber-btn p-2 text-center w-14 h-16 flex flex-col justify-between items-center cursor-pointer" id="skill-2">
+                    <span class="text-[10px] font-orbitron text-cyan-400">R-CLICK</span>
+                    <i class="fa-solid fa-crosshairs text-cyan-400 text-lg"></i>
+                    <span class="text-[10px] text-gray-300">Blaster</span>
+                </div>
+                <div class="cyber-btn p-2 text-center w-14 h-16 flex flex-col justify-between items-center cursor-pointer" id="skill-3">
+                    <span class="text-[10px] font-orbitron text-cyan-400">SPACE</span>
+                    <i class="fa-solid fa-shield-halved text-blue-400 text-lg"></i>
+                    <span class="text-[10px] text-gray-300">Dodge</span>
+                </div>
+                <div class="cyber-btn cyber-btn-yellow p-2 text-center w-16 h-16 flex flex-col justify-between items-center cursor-pointer relative" id="skill-4">
+                    <span class="text-[10px] font-orbitron text-yellow-300">KEY [R]</span>
+                    <i class="fa-solid fa-sun text-orange-400 text-xl animate-pulse"></i>
+                    <span class="text-[9px] text-yellow-200 font-bold">SOLAR BEAM</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL POPUPS (INVENTORY, SKILL TREE, MORAL LESSON) -->
+
+    <!-- INVENTORY MODAL -->
+    <div id="inventory-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-30 flex items-center justify-center p-4">
+        <div class="cyber-panel max-w-2xl w-full p-6 border-cyan-400 relative">
+            <button class="modal-close-btn absolute top-4 right-4 text-cyan-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            <h2 class="font-orbitron font-extrabold text-2xl text-cyan-400 mb-4 flex items-center gap-3">
+                <i class="fa-solid fa-shield-cat"></i> CYBERTRONIAN INVENTORY & GEAR
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-3">
+                    <h3 class="font-orbitron text-sm text-yellow-400 uppercase tracking-wider">Equipped Relics</h3>
+                    <div id="inventory-list" class="space-y-2">
+                        <!-- Items injected via JS -->
+                    </div>
+                </div>
+                <div class="cyber-panel p-4 bg-black/40 flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-orbitron text-sm text-cyan-300 uppercase tracking-wider mb-2">Combat Stats Booster</h3>
+                        <ul class="text-xs space-y-2 text-cyan-100">
+                            <li class="flex justify-between border-b border-gray-800 pb-1"><span>Attack Power:</span> <strong id="stat-atk" class="text-yellow-400">75</strong></li>
+                            <li class="flex justify-between border-b border-gray-800 pb-1"><span>Defense / Shield:</span> <strong id="stat-def" class="text-cyan-400">50</strong></li>
+                            <li class="flex justify-between border-b border-gray-800 pb-1"><span>Movement Speed:</span> <strong id="stat-spd" class="text-green-400">120%</strong></li>
+                            <li class="flex justify-between border-b border-gray-800 pb-1"><span>Solar Reflector Bonus:</span> <strong id="stat-solar" class="text-orange-400">+50% Fire Dmg</strong></li>
+                        </ul>
+                    </div>
+                    <div class="mt-4 p-2 bg-cyan-950/50 border border-cyan-800/60 rounded text-[11px] text-cyan-300">
+                        <i class="fa-solid fa-circle-info mr-1"></i> Collect Autobot Matrix components around planet Earth to maximize Voltes 5 fusion capabilities.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SKILL TREE MODAL -->
+    <div id="skills-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-30 flex items-center justify-center p-4">
+        <div class="cyber-panel max-w-3xl w-full p-6 border-yellow-400 relative">
+            <button class="modal-close-btn absolute top-4 right-4 text-yellow-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-orbitron font-extrabold text-2xl text-yellow-400 flex items-center gap-3">
+                    <i class="fa-solid fa-diagram-project"></i> AUTOBOT SKILL TREE
+                </h2>
+                <div class="text-sm font-orbitron">
+                    AVAILABLE POINTS: <span id="skill-points-display" class="text-yellow-400 font-bold text-lg">0</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Skill 1 -->
+                <div class="cyber-panel p-4 flex flex-col justify-between border-cyan-500/40">
+                    <div>
+                        <div class="w-10 h-10 rounded bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xl mb-2">
+                            <i class="fa-solid fa-handshake-angle"></i>
+                        </div>
+                        <h4 class="font-orbitron text-sm font-bold text-white mb-1">Humility Focus</h4>
+                        <p class="text-xs text-cyan-200 mb-3">Increases Energon Shield capacity and damage reduction when taking hits for teammates.</p>
+                    </div>
+                    <button onclick="upgradeSkill('humility')" class="cyber-btn w-full py-1.5 text-xs font-orbitron font-bold text-cyan-300">
+                        UPGRADE (Lvl <span id="lvl-humility">1</span>)
+                    </button>
+                </div>
+
+                <!-- Skill 2 -->
+                <div class="cyber-panel p-4 flex flex-col justify-between border-yellow-500/40">
+                    <div>
+                        <div class="w-10 h-10 rounded bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-xl mb-2">
+                            <i class="fa-solid fa-sun"></i>
+                        </div>
+                        <h4 class="font-orbitron text-sm font-bold text-white mb-1">Solar Reflector Power</h4>
+                        <p class="text-xs text-yellow-200 mb-3">Reflects sunlight through car mirror array to double solar beam burn damage against Decepticons.</p>
+                    </div>
+                    <button onclick="upgradeSkill('solar')" class="cyber-btn cyber-btn-yellow w-full py-1.5 text-xs font-orbitron font-bold text-yellow-300">
+                        UPGRADE (Lvl <span id="lvl-solar">1</span>)
+                    </button>
+                </div>
+
+                <!-- Skill 3 -->
+                <div class="cyber-panel p-4 flex flex-col justify-between border-red-500/40">
+                    <div>
+                        <div class="w-10 h-10 rounded bg-red-500/20 text-red-400 flex items-center justify-center text-xl mb-2">
+                            <i class="fa-solid fa-bolt-lightning"></i>
+                        </div>
+                        <h4 class="font-orbitron text-sm font-bold text-white mb-1">Voltes 5 Matrix Fusion</h4>
+                        <p class="text-xs text-red-200 mb-3">Unlocks 1 Million Feet Giant Humblebee transformation stats and area-of-effect shockwaves.</p>
+                    </div>
+                    <button onclick="upgradeSkill('voltes')" class="cyber-btn w-full py-1.5 text-xs font-orbitron font-bold text-red-300">
+                        UPGRADE (Lvl <span id="lvl-voltes">1</span>)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MORAL LESSON / GAME COMPLETE END SCREEN -->
+    <div id="end-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-lg z-50 flex items-center justify-center p-4">
+        <div class="cyber-panel max-w-2xl w-full p-8 border-2 border-yellow-400 text-center shadow-[0_0_50px_rgba(255,200,0,0.5)]">
+            <div class="w-20 h-20 mx-auto rounded-full bg-yellow-500/20 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-4xl mb-4 animate-bounce">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h1 class="font-orbitron font-black text-2xl md:text-4xl text-yellow-400 mb-2 tracking-wide">VICTORY FOR EARTH!</h1>
+            <h3 class="font-orbitron text-cyan-300 text-lg mb-6">Chapter 46: Bedtime Stories - Humblebee</h3>
+
+            <div class="cyber-panel p-6 bg-yellow-950/20 border-yellow-500/40 text-left mb-6 relative">
+                <div class="text-xs font-orbitron text-yellow-400 mb-2 tracking-widest uppercase"><i class="fa-solid fa-quote-left mr-1"></i> Story Moral Lesson:</div>
+                <p class="text-base md:text-lg font-medium text-yellow-100 italic leading-relaxed">
+                    "To defeat an enemy you should not be separated as one. But to unite as one to save the race. And to save from bullies like an enemy. Unite as the leader becomes humble to win. Without unity of pride lose easily."
+                </p>
+            </div>
+
+            <p class="text-sm text-cyan-200 mb-6">
+                Megatron, Starscream, and the Decepticon Horde have been incinerated by the Solar Mirror Beam of 1 Million Feet Giant Humblebee! Planet Earth is saved!
+            </p>
+
+            <button onclick="window.location.reload()" class="cyber-btn cyber-btn-yellow px-8 py-3 text-base font-orbitron font-bold text-yellow-300">
+                PLAY AGAIN / RESTART CHAPTER
+            </button>
+        </div>
+    </div>
+
+    <!-- AUDIO SYNTHESIS SCRIPT & ENGINE JS -->
+    <script>
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if(!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playLaser() {
+                if(!this.ctx) return;
+                let osc = this.ctx.createOscillator();
+                let gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+            playExplosion() {
+                if(!this.ctx) return;
+                let osc = this.ctx.createOscillator();
+                let gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+            }
+            playTransform() {
+                if(!this.ctx) return;
+                let osc = this.ctx.createOscillator();
+                let gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 1.2);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 1.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 1.2);
+            }
+            playSolarBeam() {
+                if(!this.ctx) return;
+                let osc = this.ctx.createOscillator();
+                let gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(600, this.ctx.currentTime + 0.8);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.8);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.8);
+            }
+        }
+        const sfx = new SoundFX();
+
+        const gameState = {
+            chapter: 46,
+            title: "Bedtime Stories: Humblebee",
+            questStep: 1, // 1: Talk Optimus, 2: Find 4 Novices, 3: Voltes 5 Combine, 4: Defeat Megatron & Starscream
+            alliesCollected: 0,
+            isGiant: false,
+            skillPoints: 0,
+            skills: { humility: 1, solar: 1, voltes: 1 },
+            inventory: [
+                { name: "Matrix Energy Shield", icon: "fa-shield", desc: "Absorbs Decepticon lasers." },
+                { name: "Energon Core", icon: "fa-atom", desc: "Powers Voltes 5 transformation." },
+                { name: "Sun Mirror Reflector", icon: "fa-sun", desc: "Reflects solar radiation fire." }
+            ]
+        };
+
+        const playerStats = {
+            name: "Bumblebee",
+            level: 1,
+            hp: 500,
+            maxHp: 500,
+            shield: 200,
+            maxShield: 200,
+            xp: 0,
+            maxXp: 100,
+            atk: 50,
+            speed: 0.35,
+            solarDmg: 200
+        };
+
+        let scene, camera, renderer;
+        let playerMesh, playerGroup;
+        let npcs = {};
+        let enemies = [];
+        let lasers = [];
+        let particles = [];
+        let isFirstPerson = false;
+
+        // Controls
+        const keys = { w: false, a: false, s: false, d: false, space: false, shift: false };
+        let mouseX = 0, mouseY = 0;
+        let cameraAngleX = 0, cameraAngleY = 0.3;
+        let isMouseDown = false;
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0e1a);
+            scene.fog = new THREE.FogExp2(0x0a0e1a, 0.003);
+
+            // Camera Setup
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+
+            // Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xddeeff, 0.6);
+            scene.add(ambientLight);
+
+            // Sun Light
+            const sunLight = new THREE.DirectionalLight(0xfffaed, 1.4);
+            sunLight.position.set(150, 250, 100);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 1000;
+            const d = 200;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            // Sun Mesh Visual
+            const sunGeo = new THREE.SphereGeometry(20, 32, 32);
+            const sunMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+            sunMesh.position.copy(sunLight.position);
+            scene.add(sunMesh);
+
+            // Ground Terrain
+            const groundGeo = new THREE.PlaneGeometry(800, 800, 64, 64);
+            const groundMat = new THREE.MeshStandardMaterial({ 
+                color: 0x1a2332, 
+                roughness: 0.8, 
+                metalness: 0.2 
+            });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Grid Lines Overlay
+            const grid = new THREE.GridHelper(800, 80, 0x00f0ff, 0x113355);
+            grid.position.y = 0.1;
+            scene.add(grid);
+
+            // Futuristic Buildings / City Ruins
+            buildCityEnvironment();
+
+            createPlayerModel();
+            createNPCs();
+            spawnDecepticons();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            setupEventListeners();
+        }
+
+        function buildCityEnvironment() {
+            const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
+            const matBuilding = new THREE.MeshStandardMaterial({ color: 0x222d42, roughness: 0.4, metalness: 0.7 });
+            const matGlow = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+
+            for (let i = 0; i < 45; i++) {
+                const height = 15 + Math.random() * 40;
+                const width = 10 + Math.random() * 15;
+                const depth = 10 + Math.random() * 15;
+
+                const bMesh = new THREE.Mesh(buildingGeo, matBuilding);
+                bMesh.scale.set(width, height, depth);
+                
+                let x = (Math.random() - 0.5) * 600;
+                let z = (Math.random() - 0.5) * 600;
+                // Keep center clear
+                if(Math.abs(x) < 50 && Math.abs(z) < 50) x += 80;
+
+                bMesh.position.set(x, height / 2, z);
+                bMesh.castShadow = true;
+                bMesh.receiveShadow = true;
+                scene.add(bMesh);
+
+                // Add glowing cyber stripes
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(width + 0.2, 1, depth + 0.2), matGlow);
+                stripe.position.set(x, height * 0.7, z);
+                scene.add(stripe);
+            }
+        }
+
+        function createPlayerModel() {
+            playerGroup = new THREE.Group();
+
+            // Bumblebee Body
+            const bodyGeo = new THREE.BoxGeometry(2, 2.5, 1.5);
+            const yellowMat = new THREE.MeshStandardMaterial({ color: 0xffc800, metalness: 0.8, roughness: 0.3 });
+            const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+            const cyanGlowMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+
+            const torso = new THREE.Mesh(bodyGeo, yellowMat);
+            torso.position.y = 3;
+            torso.castShadow = true;
+            playerGroup.add(torso);
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+            const head = new THREE.Mesh(headGeo, yellowMat);
+            head.position.set(0, 4.8, 0);
+            head.castShadow = true;
+            playerGroup.add(head);
+
+            // Visor Eyes
+            const visorGeo = new THREE.BoxGeometry(0.8, 0.25, 0.2);
+            const visor = new THREE.Mesh(visorGeo, cyanGlowMat);
+            visor.position.set(0, 4.9, 0.6);
+            playerGroup.add(visor);
+
+            // Shoulders & Arms
+            const armGeo = new THREE.BoxGeometry(0.8, 2.2, 0.8);
+            const leftArm = new THREE.Mesh(armGeo, blackMat);
+            leftArm.position.set(-1.6, 3, 0);
+            playerGroup.add(leftArm);
+
+            const rightArm = new THREE.Mesh(armGeo, blackMat);
+            rightArm.position.set(1.6, 3, 0);
+            playerGroup.add(rightArm);
+
+            // Legs
+            const legGeo = new THREE.BoxGeometry(0.9, 2.5, 0.9);
+            const leftLeg = new THREE.Mesh(legGeo, yellowMat);
+            leftLeg.position.set(-0.6, 1.25, 0);
+            playerGroup.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, yellowMat);
+            rightLeg.position.set(0.6, 1.25, 0);
+            playerGroup.add(rightLeg);
+
+            // Chest Autobot Mirror Reflector Badge
+            const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.2, 6), new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.9 }));
+            badge.rotation.x = Math.PI / 2;
+            badge.position.set(0, 3.4, 0.8);
+            playerGroup.add(badge);
+
+            playerGroup.position.set(0, 0, 0);
+            scene.add(playerGroup);
+        }
+
+        function createNPCs() {
+            // Helper to build Robot NPC
+            function buildRobotNPC(name, colorHex, x, z, questIcon = "fa-exclamation") {
+                const group = new THREE.Group();
+                const mat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.7, roughness: 0.3 });
+                
+                const torso = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.8, 1.6), mat);
+                torso.position.y = 3.2;
+                group.add(torso);
+
+                const head = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), mat);
+                head.position.y = 5.2;
+                group.add(head);
+
+                group.position.set(x, 0, z);
+                scene.add(group);
+
+                npcs[name] = {
+                    group: group,
+                    name: name,
+                    x: x, z: z,
+                    collected: false
+                };
+            }
+
+            // Optimus Prime (Red/Blue Leader)
+            buildRobotNPC("Optimus Prime", 0xd01111, 0, -30);
+            
+            // Novice Autobots
+            buildRobotNPC("Ratchet", 0x00cc66, -40, 20);
+            buildRobotNPC("Dedgor", 0x9933ff, 40, 30);
+            buildRobotNPC("Ashtey", 0xff6600, -50, -40);
+            buildRobotNPC("Milok", 0x0099ff, 50, -50);
+        }
+
+        function spawnDecepticons() {
+            // Megatron (Boss)
+            const megaGroup = new THREE.Group();
+            const megaMat = new THREE.MeshStandardMaterial({ color: 0x778899, metalness: 0.9, roughness: 0.2 });
+            const redGlow = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(3.5, 4.5, 2.5), megaMat);
+            torso.position.y = 5;
+            megaGroup.add(torso);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), megaMat);
+            head.position.y = 8;
+            megaGroup.add(head);
+
+            // Fusion Cannon on Arm
+            const cannon = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 4), megaMat);
+            cannon.rotation.x = Math.PI / 2;
+            cannon.position.set(2.2, 5.5, 1);
+            megaGroup.add(cannon);
+
+            megaGroup.position.set(0, 0, 150);
+            scene.add(megaGroup);
+
+            enemies.push({
+                name: "MEGATRON",
+                isBoss: true,
+                group: megaGroup,
+                hp: 5000,
+                maxHp: 5000,
+                atk: 40,
+                alive: true
+            });
+
+            // Starscream (Boss Sub-leader)
+            const starGroup = new THREE.Group();
+            const starMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, metalness: 0.8 });
+            const sTorso = new THREE.Mesh(new THREE.BoxGeometry(2.8, 3.5, 1.8), starMat);
+            sTorso.position.y = 4;
+            starGroup.add(sTorso);
+
+            // Wings
+            const wingGeo = new THREE.BoxGeometry(6, 0.2, 2);
+            const wings = new THREE.Mesh(wingGeo, starMat);
+            wings.position.set(0, 4.5, -1);
+            starGroup.add(wings);
+
+            starGroup.position.set(-30, 0, 130);
+            scene.add(starGroup);
+
+            enemies.push({
+                name: "STARSCREAM",
+                isBoss: true,
+                group: starGroup,
+                hp: 2500,
+                maxHp: 2500,
+                atk: 25,
+                alive: true
+            });
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('keydown', (e) => {
+                const k = e.key.toLowerCase();
+                if(k === 'w') keys.w = true;
+                if(k === 's') keys.s = true;
+                if(k === 'a') keys.a = true;
+                if(k === 'd') keys.d = true;
+                if(e.code === 'Space') keys.space = true;
+                
+                if(k === 'c') toggleCameraMode();
+                if(k === 'i') toggleModal('inventory-modal');
+                if(k === 'k') toggleModal('skills-modal');
+                if(k === 'f') triggerVoltesFusion();
+                if(k === 'r') useSolarBeam();
+                if(e.code === 'Space' || k === 'enter') advanceDialogue();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                const k = e.key.toLowerCase();
+                if(k === 'w') keys.w = false;
+                if(k === 's') keys.s = false;
+                if(k === 'a') keys.a = false;
+                if(k === 'd') keys.d = false;
+                if(e.code === 'Space') keys.space = false;
+            });
+
+            // Mouse Look Controls
+            window.addEventListener('mousedown', (e) => {
+                sfx.init();
+                if(e.button === 0) { // Left Click Melee Attack
+                    performMeleeAttack();
+                } else if(e.button === 2) { // Right Click Blaster Laser
+                    performBlasterLaser();
+                }
+                isMouseDown = true;
+            });
+
+            window.addEventListener('mouseup', () => { isMouseDown = false; });
+
+            window.addEventListener('mousemove', (e) => {
+                if(document.pointerLockElement === document.body || isMouseDown) {
+                    cameraAngleX -= e.movementX * 0.003;
+                    cameraAngleY += e.movementY * 0.003;
+                    cameraAngleY = Math.max(0.05, Math.min(Math.PI / 2.2, cameraAngleY));
+                }
+            });
+
+            // Context Menu prevent for right click shot
+            window.addEventListener('contextmenu', e => e.preventDefault());
+
+            // UI Buttons Modal Closes
+            document.querySelectorAll('.modal-close-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.getElementById('inventory-modal').classList.add('hidden');
+                    document.getElementById('skills-modal').classList.add('hidden');
+                });
+            });
+
+            document.getElementById('btn-inventory').addEventListener('click', () => toggleModal('inventory-modal'));
+            document.getElementById('btn-skills').addEventListener('click', () => toggleModal('skills-modal'));
+            document.getElementById('btn-camera').addEventListener('click', toggleCameraMode);
+            document.getElementById('dialogue-next-btn').addEventListener('click', advanceDialogue);
+
+            // Skill Hotbar Clicks
+            document.getElementById('skill-1').addEventListener('click', performMeleeAttack);
+            document.getElementById('skill-2').addEventListener('click', performBlasterLaser);
+            document.getElementById('skill-3').addEventListener('click', performDodgeRoll);
+            document.getElementById('skill-4').addEventListener('click', useSolarBeam);
+        }
+
+        function toggleCameraMode() {
+            isFirstPerson = !isFirstPerson;
+            document.getElementById('cam-mode-text').innerText = isFirstPerson ? "1ST" : "3RD";
+        }
+
+        function toggleModal(id) {
+            const el = document.getElementById(id);
+            el.classList.toggle('hidden');
+        }
+
+        function performMeleeAttack() {
+            sfx.playLaser();
+            // Punch Animation Visual
+            playerGroup.position.z += Math.cos(playerGroup.rotation.y) * 1.5;
+            playerGroup.position.x += Math.sin(playerGroup.rotation.y) * 1.5;
+
+            // Damage nearby enemies
+            enemies.forEach(enemy => {
+                if(!enemy.alive) return;
+                const dist = playerGroup.position.distanceTo(enemy.group.position);
+                const reach = gameState.isGiant ? 40 : 12;
+                if(dist < reach) {
+                    let dmg = playerStats.atk * (gameState.isGiant ? 5 : 1);
+                    damageEnemy(enemy, dmg);
+                }
+            });
+        }
+
+        function performBlasterLaser() {
+            sfx.playLaser();
+            // Spawn Laser Mesh
+            const laserGeo = new THREE.CylinderGeometry(0.2, 0.2, 4);
+            const laserMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+            const laser = new THREE.Mesh(laserGeo, laserMat);
+            
+            laser.position.copy(playerGroup.position);
+            laser.position.y += gameState.isGiant ? 15 : 3;
+            laser.rotation.x = Math.PI / 2;
+            laser.rotation.y = playerGroup.rotation.y;
+
+            const dir = new THREE.Vector3(
+                Math.sin(playerGroup.rotation.y),
+                0,
+                Math.cos(playerGroup.rotation.y)
+            ).normalize();
+
+            lasers.push({ mesh: laser, dir: dir, speed: 4.0, life: 60 });
+            scene.add(laser);
+        }
+
+        function performDodgeRoll() {
+            playerGroup.position.x += Math.sin(playerGroup.rotation.y) * 10;
+            playerGroup.position.z += Math.cos(playerGroup.rotation.y) * 10;
+        }
+
+        function useSolarBeam() {
+            if(gameState.questStep < 3 && !gameState.isGiant) {
+                showStoryDialogue("OPTIMUS PRIME", "Bumblebee! You must first combine into Voltes 5 Humblebee with your 4 teammates before using the Solar Radiation Mirror Beam!");
+                return;
+            }
+
+            sfx.playSolarBeam();
+
+            // Solar Mirror FX overlay
+            const canvas = document.getElementById('fx-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            ctx.fillStyle = "rgba(255, 200, 0, 0.4)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            setTimeout(() => { ctx.clearRect(0, 0, canvas.width, canvas.height); }, 600);
+
+            // Obliterate Bosses if in range
+            enemies.forEach(enemy => {
+                if(!enemy.alive) return;
+                const dist = playerGroup.position.distanceTo(enemy.group.position);
+                if(dist < 180) {
+                    let solarDmg = playerStats.solarDmg * 15;
+                    damageEnemy(enemy, solarDmg);
+                }
+            });
+        }
+
+        function damageEnemy(enemy, dmg) {
+            enemy.hp -= dmg;
+            sfx.playExplosion();
+
+            if(enemy.isBoss) {
+                document.getElementById('boss-hud-panel').classList.remove('hidden');
+                document.getElementById('boss-name').innerText = enemy.name;
+                document.getElementById('boss-hp-text').innerText = `${Math.max(0, enemy.hp)} / ${enemy.maxHp}`;
+                document.getElementById('boss-hp-bar').style.width = `${Math.max(0, (enemy.hp / enemy.maxHp) * 100)}%`;
+            }
+
+            if(enemy.hp <= 0 && enemy.alive) {
+                enemy.alive = false;
+                scene.remove(enemy.group);
+                addXP(250);
+
+                // Check victory condition
+                const remainingBosses = enemies.filter(e => e.alive && e.isBoss);
+                if(remainingBosses.length === 0) {
+                    setTimeout(() => {
+                        document.getElementById('end-modal').classList.remove('hidden');
+                    }, 1000);
+                }
+            }
+        }
+
+        const storyDialogues = [
+            {
+                speaker: "OPTIMUS PRIME",
+                text: "Bumblebee, I have a good message to say for you. If you plan to wish and defeat Megatron with his evil deeds... You must become humble! Humble is the way whenever you are defeated. Search for Ratchet, Dedgor, Ashtey, and Milok!"
+            },
+            {
+                speaker: "BUBBLEBEE",
+                text: "Oh, I get it! To defeat Megatron, I need some transformer friends to forfeit it and unite together!"
+            },
+            {
+                speaker: "OPTIMUS PRIME",
+                text: "Very good! Gather the 4 novice Autobots. Once united, I summon you to become giant Voltes 5... HUMBLEBEE!"
+            }
+        ];
+        let currentDialogueIndex = 0;
+
+        function advanceDialogue() {
+            const dialogueBox = document.getElementById('dialogue-box');
+            if(dialogueBox.classList.contains('hidden')) return;
+
+            currentDialogueIndex++;
+            if(currentDialogueIndex < storyDialogues.length) {
+                const d = storyDialogues[currentDialogueIndex];
+                document.getElementById('dialogue-speaker').innerText = d.speaker;
+                document.getElementById('dialogue-text').innerText = `"${d.text}"`;
+            } else {
+                dialogueBox.classList.add('hidden');
+                if(gameState.questStep === 1) {
+                    gameState.questStep = 2;
+                    updateQuestHUD("2. Find the 4 Novice Autobots", "Locate Ratchet, Dedgor, Ashtey, and Milok around the map to join forces.");
+                }
+            }
+        }
+
+        function showStoryDialogue(speaker, text) {
+            const dialogueBox = document.getElementById('dialogue-box');
+            dialogueBox.classList.remove('hidden');
+            document.getElementById('dialogue-speaker').innerText = speaker;
+            document.getElementById('dialogue-text').innerText = `"${text}"`;
+        }
+
+        function updateQuestHUD(title, desc) {
+            document.getElementById('quest-title').innerText = title;
+            document.getElementById('quest-desc').innerText = desc;
+        }
+
+        function triggerVoltesFusion() {
+            if(gameState.questStep !== 3) return;
+
+            sfx.playTransform();
+            gameState.isGiant = true;
+            gameState.questStep = 4;
+
+            // Scale Player Group to 1 Million Feet Giant size
+            playerGroup.scale.set(8, 8, 8);
+            
+            // Visual Aura Glow & Stat boost
+            playerStats.hp = 2500;
+            playerStats.maxHp = 2500;
+            playerStats.atk = 350;
+            updatePlayerHUD();
+
+            document.getElementById('player-name-text').innerText = "GIANT HUMBLEBEE";
+            document.getElementById('player-class-text').innerText = "VOLTES 5 FUSED LEGEND";
+            document.getElementById('fusion-status-tag').classList.add('hidden');
+
+            updateQuestHUD("4. Defeat Megatron & Starscream", "Use your massive 1 Million Feet size and Solar Radiation Beam [R] to incinerate Megatron!");
+            
+            showStoryDialogue("MEGATRON", "Oh no! Why are you so tall and huge?! Starscream, evil allies... ATTACK!!!");
+        }
+
+        function addXP(amount) {
+            playerStats.xp += amount;
+            if(playerStats.xp >= playerStats.maxXp) {
+                playerStats.level++;
+                playerStats.xp -= playerStats.maxXp;
+                playerStats.maxXp = Math.floor(playerStats.maxXp * 1.5);
+                gameState.skillPoints++;
+                document.getElementById('skill-points-display').innerText = gameState.skillPoints;
+            }
+            updatePlayerHUD();
+        }
+
+        function upgradeSkill(type) {
+            if(gameState.skillPoints <= 0) return;
+            gameState.skillPoints--;
+            gameState.skills[type]++;
+            
+            if(type === 'humility') playerStats.maxShield += 100;
+            if(type === 'solar') playerStats.solarDmg += 150;
+            if(type === 'voltes') playerStats.atk += 50;
+
+            document.getElementById('skill-points-display').innerText = gameState.skillPoints;
+            document.getElementById(`lvl-${type}`).innerText = gameState.skills[type];
+            updatePlayerHUD();
+        }
+
+        function updatePlayerHUD() {
+            document.getElementById('player-level').innerText = playerStats.level;
+            document.getElementById('hp-text').innerText = `${Math.floor(playerStats.hp)} / ${playerStats.maxHp}`;
+            document.getElementById('hp-bar').style.width = `${Math.max(0, (playerStats.hp / playerStats.maxHp) * 100)}%`;
+            document.getElementById('shield-text').innerText = `${Math.floor(playerStats.shield)} / ${playerStats.maxShield}`;
+            document.getElementById('shield-bar').style.width = `${Math.max(0, (playerStats.shield / playerStats.maxShield) * 100)}%`;
+            document.getElementById('xp-text').innerText = `${playerStats.xp} / ${playerStats.maxXp}`;
+            document.getElementById('xp-bar').style.width = `${(playerStats.xp / playerStats.maxXp) * 100}%`;
+
+            // Inventory modal stats
+            document.getElementById('stat-atk').innerText = playerStats.atk;
+            document.getElementById('stat-def').innerText = playerStats.maxShield;
+        }
+
+        function renderMinimap() {
+            const canvas = document.getElementById('minimap-canvas');
+            const ctx = canvas.getContext('2d');
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const scale = 0.25;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Player (Yellow Dot)
+            ctx.fillStyle = '#ffc800';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw NPCs (Cyan Dots)
+            Object.values(npcs).forEach(npc => {
+                const dx = (npc.x - playerGroup.position.x) * scale;
+                const dz = (npc.z - playerGroup.position.z) * scale;
+                if(Math.abs(dx) < cx && Math.abs(dz) < cy) {
+                    ctx.fillStyle = '#00f0ff';
+                    ctx.beginPath();
+                    ctx.arc(cx + dx, cy + dz, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Draw Decepticons (Red Dots)
+            enemies.forEach(enemy => {
+                if(!enemy.alive) return;
+                const dx = (enemy.group.position.x - playerGroup.position.x) * scale;
+                const dz = (enemy.group.position.z - playerGroup.position.z) * scale;
+                if(Math.abs(dx) < cx && Math.abs(dz) < cy) {
+                    ctx.fillStyle = '#ff0055';
+                    ctx.beginPath();
+                    ctx.arc(cx + dx, cy + dz, enemy.isBoss ? 6 : 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Player Movement
+            const moveSpeed = playerStats.speed * (gameState.isGiant ? 2.5 : 1.0);
+            if(keys.w) {
+                playerGroup.position.x += Math.sin(cameraAngleX) * moveSpeed;
+                playerGroup.position.z -= Math.cos(cameraAngleX) * moveSpeed;
+                playerGroup.rotation.y = cameraAngleX;
+            }
+            if(keys.s) {
+                playerGroup.position.x -= Math.sin(cameraAngleX) * moveSpeed;
+                playerGroup.position.z += Math.cos(cameraAngleX) * moveSpeed;
+                playerGroup.rotation.y = cameraAngleX + Math.PI;
+            }
+            if(keys.a) {
+                playerGroup.position.x -= Math.cos(cameraAngleX) * moveSpeed;
+                playerGroup.position.z -= Math.sin(cameraAngleX) * moveSpeed;
+                playerGroup.rotation.y = cameraAngleX + Math.PI / 2;
+            }
+            if(keys.d) {
+                playerGroup.position.x += Math.cos(cameraAngleX) * moveSpeed;
+                playerGroup.position.z += Math.sin(cameraAngleX) * moveSpeed;
+                playerGroup.rotation.y = cameraAngleX - Math.PI / 2;
+            }
+
+            // Camera Follow Logic
+            const camDist = isFirstPerson ? 0.5 : (gameState.isGiant ? 90 : 25);
+            const camHeight = isFirstPerson ? (gameState.isGiant ? 35 : 5) : (gameState.isGiant ? 45 : 12);
+
+            camera.position.x = playerGroup.position.x - Math.sin(cameraAngleX) * camDist * Math.cos(cameraAngleY);
+            camera.position.z = playerGroup.position.z + Math.cos(cameraAngleX) * camDist * Math.cos(cameraAngleY);
+            camera.position.y = playerGroup.position.y + camHeight + Math.sin(cameraAngleY) * (isFirstPerson ? 0 : 10);
+            
+            camera.lookAt(
+                playerGroup.position.x, 
+                playerGroup.position.y + (gameState.isGiant ? 25 : 4), 
+                playerGroup.position.z
+            );
+
+            // Update Lasers
+            for(let i = lasers.length - 1; i >= 0; i--) {
+                const l = lasers[i];
+                l.mesh.position.addScaledVector(l.dir, l.speed);
+                l.life--;
+
+                // Hit detection against enemies
+                enemies.forEach(enemy => {
+                    if(!enemy.alive) return;
+                    if(l.mesh.position.distanceTo(enemy.group.position) < (enemy.isBoss ? 15 : 5)) {
+                        damageEnemy(enemy, playerStats.atk);
+                        l.life = 0;
+                    }
+                });
+
+                if(l.life <= 0) {
+                    scene.remove(l.mesh);
+                    lasers.splice(i, 1);
+                }
+            }
+
+            // Check Quest Proximity Triggers
+            if(gameState.questStep === 1) {
+                const optDist = playerGroup.position.distanceTo(npcs["Optimus Prime"].group.position);
+                if(optDist < 12) {
+                    showStoryDialogue("OPTIMUS PRIME", storyDialogues[0].text);
+                }
+            } else if(gameState.questStep === 2) {
+                ["Ratchet", "Dedgor", "Ashtey", "Milok"].forEach(name => {
+                    const npc = npcs[name];
+                    if(!npc.collected) {
+                        const dist = playerGroup.position.distanceTo(npc.group.position);
+                        if(dist < 10) {
+                            npc.collected = true;
+                            scene.remove(npc.group);
+                            gameState.alliesCollected++;
+                            addXP(100);
+
+                            if(gameState.alliesCollected >= 4) {
+                                gameState.questStep = 3;
+                                updateQuestHUD("3. Voltes 5 Evolution Fusion", "All 4 Novice Autobots gathered! Press 'F' to initiate Giant Humblebee transformation!");
+                                document.getElementById('fusion-status-tag').classList.remove('hidden');
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Decepticon AI & Laser Fire
+            enemies.forEach(enemy => {
+                if(!enemy.alive) return;
+                const dist = enemy.group.position.distanceTo(playerGroup.position);
+                if(dist < 120) {
+                    enemy.group.lookAt(playerGroup.position);
+                    // Attack player if close
+                    if(Math.random() < 0.015) {
+                        if(playerStats.shield > 0) {
+                            playerStats.shield -= enemy.atk;
+                        } else {
+                            playerStats.hp -= enemy.atk;
+                        }
+                        updatePlayerHUD();
+
+                        // Flash damage screen
+                        const vig = document.getElementById('damage-vignette');
+                        vig.style.boxShadow = "inset 0 0 100px rgba(255,0,0,0.8)";
+                        setTimeout(() => { vig.style.boxShadow = "inset 0 0 100px rgba(255,0,0,0)"; }, 200);
+                    }
+                }
+            });
+
+            renderMinimap();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function initInventoryUI() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = '';
+            gameState.inventory.forEach(item => {
+                list.innerHTML += `
+                    <div class="cyber-panel p-2.5 flex items-center space-x-3 border-cyan-800">
+                        <div class="w-8 h-8 rounded bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                            <i class="fa-solid ${item.icon}"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-orbitron text-xs font-bold text-white">${item.name}</h4>
+                            <p class="text-[10px] text-cyan-200">${item.desc}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        window.onload = function() {
+            init3D();
+            initInventoryUI();
+            updatePlayerHUD();
+            animate();
+        };
+    </script>
+</body>
+</html>
